@@ -31,6 +31,21 @@ class CPU:
     self.reg[SP] = 0xF4
     # Flags register
     self.FL = 0b00000000
+    self.branchtable = {}
+    self.branchtable[LDI] = self.handle_LDI
+    self.branchtable[PRN] = self.handle_PRN
+    self.branchtable[HLT] = self.handle_HLT
+    self.branchtable[MUL] = self.handle_MUL
+    self.branchtable[POP] = self.handle_POP
+    self.branchtable[PUSH] = self.handle_PUSH
+    self.branchtable[CALL] = self.handle_CALL
+    self.branchtable[RET] = self.handle_RET
+    self.branchtable[ADD] = self.handle_ADD
+    self.branchtable[CMP] = self.handle_CMP
+    self.branchtable[JMP] = self.handle_JMP
+    self.branchtable[JEQ] = self.handle_JEQ
+    self.branchtable[JNE] = self.handle_JNE
+    
     
   def load(self):
         """Load a program into memory."""
@@ -69,87 +84,142 @@ class CPU:
 
         if op == "ADD":
             self.reg[reg_a] += self.reg[reg_b]
-        #elif op == "SUB": etc
+            # Multiply the values in two registers together and store the result in registerA
+        elif op == "MUL":  
+            self.reg[reg_a] *= self.reg[reg_b]
+            # Compare the values in two registers.
+        elif op == "CMP":  
+            if self.reg[reg_a] == self.reg[reg_b]:
+                self.fl = True
+                # Jump to the address stored in the given register.
+        elif op == "JMP":  
+            self.pc = self.reg[reg_a]
+
+        # If equal flag is set (true), jump to the address stored in the given register.
+        elif op == "JEQ":
+            if self.fl is True:
+                self.pc = self.reg[reg_a]
+            else:
+                self.pc += 2
+
+        # If E flag is clear (false, 0), jump to the address stored in the given register.
+        elif op == "JNE":
+            if self.fl is False:
+                self.pc = self.reg[reg_a]
+            else:
+              self.pc += 2
         else:
             raise Exception("Unsupported ALU operation")
+
+  def handle_LDI(self):  # sets a specified register to a specified value
+        operand_a = self.ram_read(self.pc + 1)
+        operand_b = self.ram_read(self.pc + 2)
+
+        self.reg[operand_a] = operand_b
+        self.pc += 3  # skip down 3 to PRN
+
+  def handle_PRN(self): # prints the numeric value stored in a register
+        operand_a = self.ram_read(self.pc + 1) 
+
+        print(self.reg[operand_a])
+        self.pc += 2 #skip down 2 to HLT
+
+  def handle_MUL(self): # Multiply the values in two registers together and store the result in registerA
+        operand_a = self.ram_read(self.pc + 1) 
+        operand_b = self.ram_read(self.pc + 2)
+
+        self.alu("MUL", operand_a, operand_b) #call the alu.mul and use operand_a and operand_b
+        self.pc += 3 #increment the program counter 3
+    
+  def handle_ADD(self): # Add the value in two registers and store the result in registerA.
+        operand_a = self.ram_read(self.pc + 1) 
+        operand_b = self.ram_read(self.pc + 2)
+
+        self.alu("ADD", operand_a, operand_b)
+        self.pc += 3
+
+  def handle_CMP(self):
+        operand_a = self.ram_read(self.pc + 1) 
+        operand_b = self.ram_read(self.pc + 2)
+
+        self.alu("CMP", operand_a, operand_b)
+        self.pc += 3
+
+
+  def handle_HLT(self):
+        sys.exit(0) #exit without an error unlike sys.exit 1 which means an error
+
+  def handle_POP(self):
+        reg = self.ram_read(self.pc +1)
+        value = self.ram_read(self.reg[SP]) #calls memory and gets the F5 value
+        #Copy the value
+        self.reg[reg] = value
+        #increment the stack pointer
+        self.reg[SP] += 1
+        self.pc += 2
+
+  def handle_PUSH(self):
+        reg = self.ram_read(self.pc+1)
+        value = self.reg[reg]
+        #Decrement the stack pointer
+        self.reg[SP] -= 1 
+        #Copy the value  in given register to the address pointed to by stack pointer
+        self.ram_write(self.reg[SP], value)
+        self.pc += 2 #because one argument
+
+  def handle_CALL(self):
+        # The address of the instruction directly after CALL is pushed onto the stack.
+        # This allows us to return to where we left off when the subroutine finishes executing.
+        self.reg[SP] -= 1
+        address = self.pc + 2
+        self.ram[self.reg[SP]] = address
+        # The PC is set to the address stored in the given register.
+        # We jump to that location in RAM and execute the first instruction in the subroutine.
+        # The PC can move forward or backwards from its current location.
+        reg = self.ram_read(self.pc + 1)
+        self.pc = self.reg[reg]
+        
+
+  def handle_RET(self):
+        # Return from subroutine.
+        # Pop the value from the top of the stack and store it in the PC.
+        self.pc = self.ram[self.reg[SP]]
+        self.reg[SP] += 1
+
+  def handle_JMP(self):
+        # Jump to the address stored in the given register
+        # Set the PC to the address stored in the given register.
+
+        operand_a = self.ram_read(self.pc + 1) 
+        self.alu("JMP", operand_a, None) #None we don't need operand_b
+
+
+  def handle_JEQ(self):
+        # If equal flag is set (true), jump to the address stored in the given register.
+        operand_a = self.ram_read(self.pc + 1) 
+
+        self.alu("JEQ", operand_a, None) #None we don't need operand_b
+
+
+  def handle_JNE(self):
+        # If E flag is clear (false, 0), jump to the address stored in the given register.
+        operand_a = self.ram_read(self.pc + 1) 
+
+        self.alu("JNE", operand_a, None) 
+
 
   def run(self):
         """Run the CPU."""
         #load the program
         self.load()
         running = True
-        print("hello")
+        
         while True:
             # instruction register
-            ir = self.ram[self.pc]
             # read command
-            op = self.ram_read(ir)
-            # read operands
-            operand_a = self.ram_read(self.pc + 1)
-            operand_b = self.ram_read(self.pc + 2)
-        if op == LDI:
-            self.reg[operand_a] = operand_b
-            self.pc += 3  # Skip 3
-
-        elif op == PRN:
-            # print numeric value stored in register
-            print(self.reg[operand_a])
-            self.pc += 2  # skip 2
-
-        elif op == MUL:
-            self.alu("MUL", operand_a, operand_b)
-            self.pc += 3
-
-        elif op == PUSH:
-                regs = self.ram[pc + 1]
-                val = self.reg[regs]
-                # Decrement the SP.
-                self.reg[SP] -= 1
-                # Copy the value in the given register to the address pointed to by SP.
-                self.ram[reg[SP]] = val
-                pc += 2
-
-        elif op == POP:
-            regs = self.ram[pc + 1]
-            val = self.ram[regs[SP]]
-            # Copy the value from the address pointed to by SP to the given register.
-            # Increment SP.
-
-        elif op == JMP:
-          # Jump to the address stored in the given register.
-          # Set the PC to the address stored in the given register.
-          reg = self.ram_read(self.pc + 1)
-          self.pc = self.reg[reg]
-          
-        elif op == CMP:
-          # Compare the values in two registers.
-          # If they are equal, set the Equal E flag to 1, otherwise set it to 0.
-          # If registerA is less than registerB, set the Less-than L flag to 1, otherwise set it to 0.
-          # If registerA is greater than registerB, set the Greater-than G flag to 1, otherwise set it to 0.
-          pass
-
-        elif op == JEQ:
-          # If equal flag is set(true), jump to the address stored in the given register.
-          reg = self.ram_read(self.pc + 1)
-          if self.FL == 1:
-            self.pc = self.reg[reg] 
-          else:
-            self.pc += operand_a
-            
-        elif op == JNE:
-          reg = self.ram_read(self.pc + 1)
-            # if equal flag is clear (false, 0), jump to the address stored in the given register.
-          if self.fl & 0b00000001 == 0:
-                self.JMP(reg)
-          else:
-                self.pc += 2
-            
-        elif op == HLT:
-            running = False
-
-        else:
-            print(f"cant get this instruction: {op}")
-            sys.exit(1)
+            IR = self.ram[self.pc]
+            self.branchtable[IR]()
+        print("hello")
 
   def ram_read(self, MAR):  # mar - Memory Address Register
         """Return value stored at address"""
