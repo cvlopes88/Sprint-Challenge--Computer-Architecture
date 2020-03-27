@@ -1,21 +1,20 @@
 import sys
 
-HLT = 0b00000001
-LDI = 0b10000010
-PRN = 0b01000111
-ADD = 0b10100000
-SUB = 0b10100001
-MUL = 0b10100010
+
+LDI = 0b10000010 
+PRN = 0b01000111 
+HLT = 0b00000001 
+MUL = 0b10100010 
+POP = 0b01000110 
 PUSH = 0b01000101
-POP = 0b01000110
 CALL = 0b01010000
 RET = 0b00010001
-CMP = 0b10100111
-JMP = 0b01010100
-JEQ = 0b01010101
-JNE = 0b01010110
-
-SP = 7
+ADD = 0b10100000
+CMP = 0b10100111 
+JMP = 0b01010100 
+JEQ = 0b01010101 
+JNE = 0b01010110 
+SP = 7 
 
 class CPU:
   
@@ -28,9 +27,9 @@ class CPU:
     # program counter
     self.pc = 0
     # Stack Pointer, initialized 1 spot above the beginning of stack when empty
-    self.reg[SP] = 0xF4
+    # self.reg[SP] = 0xF4
     # Flags register
-    self.FL = 0b00000000
+    self.fl = False
     self.branchtable = {}
     self.branchtable[LDI] = self.handle_LDI
     self.branchtable[PRN] = self.handle_PRN
@@ -47,7 +46,7 @@ class CPU:
     self.branchtable[JNE] = self.handle_JNE
     
     
-  def load(self):
+  def load(self, datas):
         """Load a program into memory."""
         # Error handling
         if len(sys.argv) != 2:
@@ -59,7 +58,7 @@ class CPU:
         
         
         try:
-            with open(sys.argv[1]) as p:
+            with open(datas) as p:
                 for line in p:
 
                     #ignore comments
@@ -79,7 +78,7 @@ class CPU:
             sys.exit(2)
 
 
-  def alu(self, op, reg_a, reg_b):
+  def alu(self, op, reg_a, reg_b=None):
         """ALU operations."""
 
         if op == "ADD":
@@ -121,7 +120,7 @@ class CPU:
   def handle_PRN(self): # prints the numeric value stored in a register
         operand_a = self.ram_read(self.pc + 1) 
 
-        print(self.reg[operand_a])
+        print("printing>>", self.reg[operand_a])
         self.pc += 2 #skip down 2 to HLT
 
   def handle_MUL(self): # Multiply the values in two registers together and store the result in registerA
@@ -211,7 +210,7 @@ class CPU:
   def run(self):
         """Run the CPU."""
         #load the program
-        self.load()
+        
         running = True
         
         while True:
@@ -231,3 +230,24 @@ class CPU:
         # MAR = Memory Address Register, contains the address that is being read or written to
         # MDR =  Memory Data Register, contains the data that was read or the data to write
         self.ram[MAR] = MDR
+
+
+def trace(self):
+        """
+        Handy function to print out the CPU state. You might want to call this
+        from run() if you need help debugging.
+        """
+
+        print(f"TRACE: %02X | %02X %02X %02X |" % (
+           self.pc,
+           # self.fl,
+            # self.ie,
+            self.ram_read(self.pc),
+            self.ram_read(self.pc + 1),
+            self.ram_read(self.pc + 2)
+        ), end='')
+
+        for i in range(8):
+            print(" %02X" % self.reg[i], end='')
+
+        print(trace())
